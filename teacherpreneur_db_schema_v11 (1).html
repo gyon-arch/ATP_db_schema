@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#f4f5f7; overflow:hidden; width:100vw; height:100vh; font-family:'Noto Sans KR',sans-serif; }
+.toolbar {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  display:flex; gap:8px; align-items:center;
+  background:#fff; border:1px solid #e2e5ec; border-radius:8px;
+  padding:7px 16px; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+  z-index:100; font-size:12px; color:#64748b;
+}
+.toolbar strong { color:#1e293b; font-size:13px; }
+.sep { width:1px; height:16px; background:#e2e5ec; }
+.btn { padding:3px 10px; border-radius:5px; border:1px solid #e2e5ec; background:#f8fafc; cursor:pointer; font-size:11px; color:#475569; }
+.btn:hover { background:#f1f5f9; }
+.legend {
+  position:fixed; bottom:18px; right:18px;
+  background:#fff; border:1px solid #e2e5ec; border-radius:12px;
+  padding:18px 22px; box-shadow:0 4px 16px rgba(0,0,0,0.10);
+  z-index:100; line-height:1.9; min-width:240px;
+}
+.lt { font-size:12px; font-weight:700; color:#94a3b8; margin-bottom:12px; letter-spacing:.1em; text-transform:uppercase; font-family:'IBM Plex Mono',monospace; }
+.li { display:flex; align-items:center; gap:10px; margin-bottom:7px; color:#374151; font-size:13px; }
+.li:last-child { margin-bottom:0; }
+.ld { width:14px; height:14px; border-radius:4px; flex-shrink:0; }
+#main-svg { display:block; width:100vw; height:100vh; cursor:grab; }
+#main-svg:active { cursor:grabbing; }
+.session-badge {
+  position:fixed; top:14px; right:18px;
+  background:#fef9c3; border:1px solid #fde047; border-radius:8px;
+  padding:6px 12px; font-size:11px; color:#713f12; z-index:100;
+}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <strong>티처프러너 통합 DB 스키마</strong>
+  <span class="sep"></span>
+  <span>16개 테이블 · 4열 구조 · v11</span>
+  <span class="sep"></span>
+  <span>드래그 이동 · 스크롤 줌 · 카드 드래그</span>
+  <span class="sep"></span>
+  <button class="btn" onclick="resetView()">초기화</button>
+</div>
+<div class="session-badge">📋 2026-04-27 세션 피드백 반영</div>
+<div class="legend">
+  <div class="lt">범례</div>
+  <div class="li"><div class="ld" style="background:#1d4ed8"></div> 1열 — 기본 정보</div>
+  <div class="li"><div class="ld" style="background:#059669"></div> 2열 — 활동 성과</div>
+  <div class="li"><div class="ld" style="background:#c2410c"></div> 3열 — 베네핏 평가</div>
+  <div class="li"><div class="ld" style="background:#7c3aed"></div> 4열 — 임팩트 집계</div>
+  <div style="border-top:1px solid #f1f5f9;margin:10px 0;"></div>
+  <div class="li">
+    <svg width="46" height="16" style="flex-shrink:0"><circle cx="5" cy="8" r="4" fill="#fff" stroke="#3b82f6" stroke-width="1.8"/><line x1="9" y1="8" x2="38" y2="8" stroke="#3b82f6" stroke-width="1.6"/><text x="40" y="12" font-size="11" fill="#3b82f6" font-family="IBM Plex Mono,monospace">1</text></svg>
+    FK 참조 연결 (N→1)
+  </div>
+  <div class="li">
+    <svg width="46" height="16" style="flex-shrink:0"><line x1="0" y1="8" x2="38" y2="8" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="4,2"/></svg>
+    Rollup/Lookup 집계
+  </div>
+  <div style="border-top:1px solid #f1f5f9;margin:10px 0;"></div>
+  <div class="li"><div class="ld" style="background:#fef08a;border:1px solid #fde047"></div> 세션 피드백 반영 필드</div>
+</div>
+<svg id="main-svg"></svg>
+<script>
+const NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('main-svg');
+let vx=40,vy=80,vscale=0.52;
+let panning=false,px0=0,py0=0,vx0=0,vy0=0;
+const rootG=document.createElementNS(NS,'g'); svg.appendChild(rootG);
+const bgG=document.createElementNS(NS,'g'); rootG.appendChild(bgG);
+const edgeG=document.createElementNS(NS,'g'); rootG.appendChild(edgeG);
+const nodeG=document.createElementNS(NS,'g'); rootG.appendChild(nodeG);
+function applyT(){ rootG.setAttribute('transform',`translate(${vx},${vy}) scale(${vscale})`); }
+applyT();
+svg.addEventListener('mousedown',e=>{ if(e.target.closest&&e.target.closest('[data-node]'))return; panning=true;px0=e.clientX;py0=e.clientY;vx0=vx;vy0=vy; });
+window.addEventListener('mousemove',e=>{ if(!panning)return; vx=vx0+e.clientX-px0;vy=vy0+e.clientY-py0;applyT(); });
+window.addEventListener('mouseup',()=>{panning=false;});
+svg.addEventListener('wheel',e=>{ e.preventDefault(); vscale=Math.min(2,Math.max(0.15,vscale*(e.deltaY>0?0.92:1.08)));applyT(); },{passive:false});
+function resetView(){vx=40;vy=80;vscale=0.52;applyT();redrawEdges();}
+
+const W=272,COL_GAP=140,ROW_GAP=16,HDR_H=40,ROW_H=23,GROUP_H=32,GROUP_GAP=20;
+const C0=0,C1=C0+W+COL_GAP,C2=C1+W+COL_GAP,C3=C2+W+COL_GAP;
+const BADGE={PK:{bg:'#dbeafe',fg:'#1e40af',l:'PK'},FK:{bg:'#f1f5f9',fg:'#475569',l:'FK'},FM:{bg:'#d1fae5',fg:'#065f46',l:'Fml'},F:{bg:'#f8f9fa',fg:'#9ca3af',l:'Field'}};
+const BASE_COLOR='#1d4ed8';
+
+const TABLES=[
+  // ── Col 0: 기본 정보 ──
+  {id:'people',col:0,color:BASE_COLOR,label:'01_People',role:'중심 테이블',fields:[
+    {k:'F',n:'성명'},{k:'F',n:'기수'},{k:'F',n:'성별'},{k:'F',n:'생년월일'},{k:'FM',n:'연령'},
+    {k:'F',n:'교사 재직 상태'},{k:'F',n:'이메일'},{k:'F',n:'핸드폰번호'},{k:'-'},
+    {k:'FM',n:'근무 학교'},{k:'FM',n:'학교 유형',s:true},{k:'FM',n:'직책'},
+    {k:'FM',n:'담당교과'},{k:'FM',n:'지역'},{k:'-'},
+    {k:'F',n:'동문 활동 참여 여부',s:true},
+    {k:'FM',n:'스쿨 참여 횟수'},{k:'FM',n:'커뮤니티 참여 횟수'},{k:'FM',n:'네트워킹 데이 참여 횟수'},{k:'-'},
+    {k:'F',n:'TPACK 연도'},{k:'F',n:'TPACK 사전'},{k:'F',n:'TPACK 사후'},
+    {k:'F',n:'강사 여부'},{k:'F',n:'메모'},
+  ]},
+  {id:'program',col:0,color:BASE_COLOR,label:'02_Program',role:'프로그램 목록',fields:[
+    {k:'FM',n:'Program_ID'},{k:'F',n:'프로그램명'},{k:'F',n:'상태'},
+    {k:'F',n:'운영사'},{k:'F',n:'담당자'},{k:'F',n:'교육 주제'},{k:'-'},
+    {k:'F',n:'프로그램_참여교사_만족도'},{k:'F',n:'프로그램_참여교사_NPS'},
+    {k:'F',n:'프로그램_만족도_설문참여율'},{k:'F',n:'피드백'},
+  ]},
+  {id:'batch',col:0,color:BASE_COLOR,label:'03_Batch (Year)',role:'연도별 회차',fields:[
+    {k:'FM',n:'Batch_ID'},{k:'FK',n:'Program 연결',link:{to:'program',toField:'Program_ID'}},
+    {k:'F',n:'시작일'},{k:'F',n:'종료일'},{k:'FM',n:'진행기간'},{k:'F',n:'담당자'},{k:'-'},
+    {k:'F',n:'행사_참여인원'},{k:'F',n:'행사_설문참여인원'},
+    {k:'FM',n:'행사_만족도_조사진행율',s:true},
+    {k:'F',n:'행사_참여교사_만족도'},{k:'F',n:'행사_참여교사_NPS'},
+    {k:'F',n:'행사_피드백 주요 내용'},{k:'F',n:'만족도_원본파일'},
+  ]},
+  {id:'session',col:0,color:BASE_COLOR,label:'03a_Session',role:'세션 단위 관리',fields:[
+    {k:'FK',n:'Batch 연결',link:{to:'batch',toField:'Batch_ID'}},
+    {k:'FK',n:'강사 연결 (동문교사)',link:{to:'people',toField:'성명'}},
+    {k:'F',n:'세션 일시'},{k:'F',n:'진행 시간'},{k:'F',n:'장소'},
+    {k:'F',n:'프로그램 구분'},{k:'-'},
+    {k:'F',n:'강사명'},{k:'F',n:'강사 소속'},{k:'F',n:'강사 유형'},
+    {k:'F',n:'강의 주제'},{k:'F',n:'재참여 여부'},{k:'-'},
+    {k:'F',n:'내용 요약'},{k:'F',n:'활동 방식'},{k:'F',n:'사용 교재 도구'},{k:'F',n:'결과물'},
+  ]},
+  {id:'history',col:0,color:BASE_COLOR,label:'04_School_History',role:'학교·직책 이력',fields:[
+    {k:'FK',n:'교사명',link:{to:'people',toField:'성명'}},
+    {k:'F',n:'재직 연도',s:true},{k:'F',n:'학교명'},
+    {k:'FM',n:'현재 재직 여부'},{k:'-'},
+    {k:'F',n:'학교 유형'},{k:'F',n:'지역'},
+    {k:'F',n:'직책'},{k:'F',n:'담당교과'},{k:'-'},
+    {k:'FM',n:'해당 연도 스쿨 참여 여부'},
+    {k:'FM',n:'해당 연도 커뮤니티 참여 여부'},
+    {k:'F',n:'활동 유형'},
+  ]},
+
+  // ── Col 1: 활동 성과 ──
+  {id:'attendance',col:1,color:'#047857',label:'05_Participation',role:'전체 프로그램 참여 이력',fields:[
+    {k:'FK',n:'참여 교사',link:{to:'people',toField:'성명'}},
+    {k:'FK',n:'Batch 연결',link:{to:'batch',toField:'Batch_ID'}},
+    {k:'FM',n:'기수'},{k:'FM',n:'참여 연도'},{k:'FM',n:'행사 구분'},{k:'-'},
+    {k:'F',n:'참여 상태'},
+    {k:'FM',n:'행사 시작일'},{k:'FM',n:'행사 종료일'},
+  ]},
+  {id:'school',col:1,color:'#059669',label:'06_School',role:'스쿨 수업 기본정보',fields:[
+    {k:'FK',n:'교사명',link:{to:'people',toField:'성명'}},
+    {k:'FK',n:'프로그램 연결',link:{to:'program',toField:'Program_ID'}},
+    {k:'F',n:'연도'},{k:'F',n:'제출 상태'},{k:'-'},
+    {k:'F',n:'소속 학교'},{k:'F',n:'학교 난이도'},
+    {k:'F',n:'수업명'},{k:'F',n:'수업 운영 과목명'},{k:'-'},
+    {k:'F',n:'수업 시작일'},{k:'F',n:'수업 마감일'},{k:'FM',n:'진행기간'},
+    {k:'F',n:'스쿨_총차시수'},{k:'F',n:'스쿨_학생수'},{k:'F',n:'스쿨_총사용금'},{k:'-'},
+    {k:'F',n:'교육 진행 방식'},{k:'F',n:'커리큘럼 사용 계획'},
+    {k:'F',n:'수업 운영 형태'},{k:'F',n:'기업가정신 정의'},{k:'F',n:'기업가정신 핵심 역량'},{k:'-'},
+    {k:'F',n:'교사 에세이'},{k:'F',n:'활동사진'},
+  ]},
+  {id:'school_result',col:1,color:'#10b981',label:'06a_School_Result',role:'스쿨 프로젝트 성과',fields:[
+    {k:'FK',n:'스쿨 수업 연결',link:{to:'school',toField:'스쿨_학생수'}},
+    {k:'FM',n:'교사명'},{k:'FM',n:'연도'},{k:'-'},
+    {k:'F',n:'프로젝트 유형'},{k:'F',n:'프로젝트 수'},
+    {k:'F',n:'도달 수 합계'},{k:'F',n:'매출액 합계'},{k:'F',n:'프로젝트 상세'},
+  ]},
+  {id:'school_impact',col:1,color:'#34d399',label:'06b_School_Impact',role:'스쿨 효과성·만족도',fields:[
+    {k:'FK',n:'스쿨 수업 연결',link:{to:'school',toField:'스쿨_학생수'}},
+    {k:'FM',n:'교사명'},{k:'FM',n:'연도'},{k:'-'},
+    {k:'FM',n:'스쿨_학생수'},{k:'FM',n:'스쿨_총차시수'},
+    {k:'F',n:'학급 및 학생 정보'},{k:'F',n:'참여 인원'},{k:'-'},
+    {k:'FM',n:'총 프로젝트 수'},{k:'FM',n:'총 도달 수'},{k:'FM',n:'총 매출액'},{k:'-'},
+    {k:'F',n:'효과성_기업가정신(혁신성)_사전'},
+    {k:'F',n:'효과성_기업가정신(혁신성)_사후'},
+    {k:'FM',n:'효과성_기업가정신(혁신성)_향상도'},
+    {k:'F',n:'효과성_기업가정신(진취성)_사전'},
+    {k:'F',n:'효과성_기업가정신(진취성)_사후'},
+    {k:'FM',n:'효과성_기업가정신(진취성)_향상도'},
+    {k:'F',n:'효과성_기업가정신(위험감수성)_사전'},
+    {k:'F',n:'효과성_기업가정신(위험감수성)_사후'},
+    {k:'FM',n:'효과성_기업가정신(위험감수성)_향상도'},
+    {k:'F',n:'효과성_창업의지_사전'},{k:'F',n:'효과성_창업의지_사후'},
+    {k:'F',n:'효과성_자원활용능력_사전'},{k:'F',n:'효과성_자원활용능력_사후'},{k:'-'},
+    {k:'FM',n:'효과성_기업가정신_사전평균'},{k:'FM',n:'효과성_기업가정신_사후평균'},
+    {k:'FM',n:'효과성_기업가정신_향상도'},
+    {k:'FM',n:'효과성_창업의지_향상도'},{k:'FM',n:'효과성_자원활용능력_향상도'},{k:'-'},
+    {k:'FM',n:'효과성_전체_사전평균'},{k:'FM',n:'효과성_전체_사후평균'},{k:'FM',n:'효과성_전체_향상도'},
+    {k:'F',n:'효과성_측정도구'},{k:'F',n:'효과성_원본파일'},{k:'-'},
+    {k:'F',n:'스쿨_만족도_수업시간_충분성'},{k:'F',n:'스쿨_만족도_내용_이해도'},
+    {k:'F',n:'스쿨_만족도_교사_전달'},{k:'F',n:'스쿨_만족도_교사_소통'},
+    {k:'F',n:'스쿨_만족도_전반적',s:true},{k:'F',n:'스쿨_학생_NPS',s:true},
+    {k:'F',n:'스쿨_동문교사_NPS',s:true},{k:'F',n:'스쿨_만족도_응답률'},
+    {k:'F',n:'학생_주관식_주요내용'},
+  ]},
+  {id:'community',col:1,color:'#059669',label:'07_Community',role:'커뮤니티 기본정보',fields:[
+    {k:'FK',n:'프로그램 연결',link:{to:'program',toField:'Program_ID'}},
+    {k:'FK',n:'팀장',link:{to:'people',toField:'성명'}},
+    {k:'FK',n:'팀원',link:{to:'people',toField:'성명'}},
+    {k:'FK',n:'회계 담당자',link:{to:'people',toField:'성명'},s:true},
+    {k:'FM',n:'팀원 수'},{k:'F',n:'연도'},{k:'-'},
+    {k:'F',n:'커뮤니티 팀명'},{k:'F',n:'프로젝트명'},{k:'F',n:'프로젝트 주제'},
+    {k:'F',n:'프로젝트 키워드'},{k:'F',n:'기업가정신 정의'},{k:'F',n:'기업가정신 핵심 역량'},{k:'-'},
+    {k:'F',n:'커뮤니티 시작일'},{k:'F',n:'커뮤니티 종료일'},{k:'FM',n:'진행 기간'},
+    {k:'F',n:'진행 횟수'},{k:'F',n:'진행 장소'},{k:'F',n:'모임 방식'},
+    {k:'F',n:'프로젝트 진행방식'},{k:'FM',n:'교육/확산 대상'},{k:'FM',n:'교육/확산 대상 수'},
+    {k:'F',n:'총 사용 지원금'},{k:'-'},
+    {k:'F',n:'교사 에세이'},{k:'F',n:'활동사진'},{k:'-'},
+    {k:'FM',n:'총 활동 횟수',s:true},{k:'FM',n:'총 확산 인원'},
+  ]},
+  {id:'community_result',col:1,color:'#10b981',label:'07a_Community_Result',role:'커뮤니티 활동 성과',fields:[
+    {k:'FK',n:'커뮤니티 연결',link:{to:'community',toField:'커뮤니티 팀명'}},
+    {k:'FM',n:'팀명'},{k:'FM',n:'연도'},{k:'-'},
+    {k:'FM',n:'프로젝트 진행 방식'},{k:'F',n:'기타 진행 방식 기재'},
+    {k:'F',n:'진행 횟수/개발 건수'},
+    {k:'FM',n:'교육/확산 대상'},{k:'FM',n:'교육/확산 대상 수'},
+    {k:'F',n:'활동 상세 내용'},{k:'F',n:'활동 성과 유형',s:true},{k:'-'},
+    {k:'FM',n:'진행 장소'},{k:'FM',n:'교육/확산 대상 (상세)'},{k:'FM',n:'교육/확산 대상 수 (상세)'},
+    {k:'FM',n:'총 사용 지원금'},{k:'-'},
+    {k:'FM',n:'총 활동 횟수',s:true},{k:'FM',n:'총 확산 인원'},
+  ]},
+  {id:'community_impact',col:1,color:'#6ee7b7',label:'07b_Community_Impact',role:'커뮤니티 만족도·NPS',fields:[
+    {k:'FK',n:'커뮤니티 연결',link:{to:'community',toField:'커뮤니티 팀명'}},
+    {k:'FM',n:'팀명'},{k:'FM',n:'연도'},{k:'-'},
+    {k:'F',n:'만족도_기업가정신이해'},{k:'F',n:'만족도_활동구성만족'},
+    {k:'F',n:'만족도 응답 인원'},{k:'-'},
+    {k:'F',n:'대상자 NPS'},{k:'F',n:'NPS 응답 인원'},{k:'-'},
+    {k:'F',n:'추천/비추천 이유'},{k:'F',n:'인사이트 주요 내용'},{k:'-'},
+    {k:'FM',n:'KAS_지식(K)_평균'},{k:'FM',n:'KAS_태도(A)_평균'},
+    {k:'FM',n:'KAS_기술(S)_평균'},{k:'FM',n:'KAS_전체_평균'},
+    {k:'FM',n:'KAS_총 응답 인원'},
+  ]},
+  {id:'community_kas',col:1,color:'#a7f3d0',label:'07c_Community_KAS',role:'커뮤니티 KAS 임팩트',fields:[
+    {k:'FK',n:'커뮤니티 연결',link:{to:'community',toField:'커뮤니티 팀명'}},
+    {k:'FK',n:'활동 산출물 연결',link:{to:'community_result',toField:'활동 성과 유형'}},
+    {k:'FM',n:'팀명'},{k:'FM',n:'연도'},{k:'-'},
+    {k:'FM',n:'팀원'},{k:'FM',n:'팀원 수'},{k:'FM',n:'프로젝트명'},
+    {k:'FM',n:'프로젝트 주제'},{k:'FM',n:'진행 횟수'},
+    {k:'FM',n:'확산 대상 수'},{k:'FM',n:'총 사용 지원금'},{k:'-'},
+    {k:'FM',n:'수업 및 강의 건수'},{k:'FM',n:'교구 개발 건수'},
+    {k:'FM',n:'커리큘럼 개발 건수'},{k:'FM',n:'캠프 및 성과공유회 건수'},{k:'FM',n:'기타 건수'},{k:'-'},
+    {k:'FM',n:'학생 대상 활동 건수'},{k:'FM',n:'교사 대상 활동 건수'},{k:'FM',n:'기타 대상 활동 건수'},{k:'-'},
+    {k:'F',n:'임팩트 대상'},{k:'F',n:'K 측정 문항'},{k:'F',n:'임팩트 지식(K)'},
+    {k:'F',n:'A 측정 문항'},{k:'F',n:'임팩트 태도(A)'},
+    {k:'F',n:'S 측정 문항'},{k:'F',n:'임팩트 기술(S)'},
+    {k:'F',n:'KAS 응답 인원'},{k:'-'},
+    {k:'FM',n:'KAS_지식(K)_평균'},{k:'FM',n:'KAS_태도(A)_평균'},
+    {k:'FM',n:'KAS_기술(S)_평균'},{k:'FM',n:'KAS_전체_평균'},
+    {k:'FM',n:'KAS_총 응답 인원'},
+  ]},
+
+  // ── Col 2: 베네핏 평가 ──
+  {id:'benefit',col:2,color:'#c2410c',label:'08a_Alumni_Benefit',role:'후보자 자격 자동 산출',fields:[
+    {k:'FK',n:'교사 연결',link:{to:'people',toField:'성명'}},{k:'-'},
+    {k:'FM',n:'스쿨 참여 횟수'},{k:'FM',n:'누적 학생 수'},{k:'FM',n:'연평균 교육 차시'},
+    {k:'FM',n:'만족도 진행률 (%)'},{k:'FM',n:'소속 지역'},{k:'FM',n:'담당 과목 유형'},
+    {k:'FM',n:'동문교사 NPS'},{k:'F',n:'산출 연도'},{k:'F',n:'연수 참여 여부'},{k:'-'},
+    {k:'FM',n:'스쿨 4회 이상'},{k:'FM',n:'학생 80명 이상'},{k:'FM',n:'기본 자격 충족 여부'},{k:'-'},
+    {k:'FM',n:'누적 학생 수 점수'},{k:'FM',n:'연평균 차시 점수'},
+    {k:'FM',n:'만족도 진행률 점수'},{k:'FM',n:'지역 난이도 가점'},
+    {k:'FM',n:'과목 난이도 가점'},{k:'FM',n:'NPS 충족 가점'},
+    {k:'FM',n:'정량 점수 합계'},{k:'FM',n:'보너스 점수 합계'},{k:'-'},
+    {k:'F',n:'재단 행사 학생 참석 지원'},{k:'F',n:'티처프러너 커리큘럼 활용'},
+    {k:'FM',n:'가점 합계'},
+  ]},
+  {id:'final_benefit',col:2,color:'#b45309',label:'08_Alumni_Benefit',role:'최종 후보자 선정',fields:[
+    {k:'FK',n:'교사 연결',link:{to:'people',toField:'성명'}},
+    {k:'FK',n:'베네핏 점수 연결',link:{to:'benefit',toField:'기본 자격 충족 여부'}},{k:'-'},
+    {k:'FM',n:'산출 연도'},{k:'FM',n:'정량 점수 합계'},
+    {k:'FM',n:'보너스 점수 합계'},{k:'FM',n:'가점 합계'},{k:'-'},
+    {k:'F',n:'체계적 수업 운영 점수'},{k:'F',n:'기업가정신 임팩트 점수'},
+    {k:'FM',n:'정성 점수 합계'},
+    {k:'F',n:'심사위원 코멘트',s:true},{k:'F',n:'심사 완료일'},{k:'-'},
+    {k:'FM',n:'최종 합산 점수'},{k:'FM',n:'순위'},{k:'FM',n:'최종 후보 자격'},
+  ]},
+
+  // ── Col 3: 임팩트 집계 ──
+  {id:'dashboard',col:3,color:'#7c3aed',label:'09_Impact_Dashboard',role:'임팩트 집계',fields:[
+    {k:'F',n:'연도'},{k:'-'},
+    {k:'FM',n:'전체 동문 수'},{k:'FM',n:'활동중 동문 수'},{k:'FM',n:'전체 대비 활동 비율'},{k:'-'},
+    {k:'FM',n:'전체 참여 교사 수 (중복 제거)',s:true},
+    {k:'FM',n:'스쿨 참여 교사 수'},{k:'FM',n:'커뮤니티 참여 교사 수'},
+    {k:'FM',n:'스쿨+커뮤니티 참여 교사 수',s:true},
+    {k:'FM',n:'워크숍 참여 교사 수'},{k:'FM',n:'네트워킹 데이 참여 교사 수'},{k:'-'},
+    {k:'FM',n:'연도별 스쿨 운영 학교 수'},
+    {k:'FM',n:'누적 교육 학생 수'},{k:'FM',n:'누적 교육 차시'},
+    {k:'FM',n:'평균 교육 차시'},{k:'FM',n:'교급별 수업 분포'},{k:'FM',n:'지역별 수업 분포'},{k:'-'},
+    {k:'FM',n:'학생 만족도 평균',s:true},{k:'FM',n:'학생 NPS 평균',s:true},
+    {k:'FM',n:'참여교사 NPS 평균',s:true},{k:'-'},
+    {k:'FM',n:'효과성_전체_사전평균'},{k:'FM',n:'효과성_전체_사후평균'},{k:'FM',n:'효과성_전체_향상도'},{k:'-'},
+    {k:'FM',n:'누적 프로젝트 수'},{k:'FM',n:'누적 프로젝트 도달 수'},{k:'FM',n:'누적 매출액'},{k:'-'},
+    {k:'FM',n:'커뮤니티 팀 수'},{k:'FM',n:'총 확산 인원'},
+    {k:'FM',n:'수업 및 강의 건수'},{k:'FM',n:'교구 개발 건수'},
+    {k:'FM',n:'커리큘럼 개발 건수'},{k:'FM',n:'캠프 및 성과공유회 건수'},{k:'-'},
+    {k:'FM',n:'커뮤니티 만족도 평균',s:true},{k:'FM',n:'커뮤니티 NPS 평균',s:true},{k:'-'},
+    {k:'FM',n:'KAS_지식(K) 평균',s:true},{k:'FM',n:'KAS_태도(A) 평균',s:true},
+    {k:'FM',n:'KAS_기술(S) 평균',s:true},{k:'FM',n:'KAS_전체 평균',s:true},{k:'-'},
+    {k:'FM',n:'학생 대상 활동 건수'},{k:'FM',n:'교사 대상 활동 건수'},{k:'FM',n:'기타 대상 활동 건수'},{k:'-'},
+    {k:'FM',n:'워크숍 만족도 평균'},{k:'FM',n:'워크숍 NPS'},{k:'FM',n:'워크숍 참여자 수'},
+    {k:'FM',n:'네트워킹데이 만족도 평균'},{k:'FM',n:'네트워킹데이 NPS'},{k:'FM',n:'네트워킹데이 참여자 수'},
+    {k:'FM',n:'정기교육 NPS'},
+  ]},
+];
+
+const COL_X=[C0,C1,C2,C3];
+const colY=[GROUP_H+GROUP_GAP,GROUP_H+GROUP_GAP,GROUP_H+GROUP_GAP,GROUP_H+GROUP_GAP];
+const nodeRects={};
+const fieldYMap={};
+
+TABLES.forEach(tb=>{
+  const nRows=tb.fields.filter(f=>f.k!=='-').length;
+  const nSeps=tb.fields.filter(f=>f.k==='-').length;
+  const h=HDR_H+nRows*ROW_H+nSeps*8+8;
+  const x=COL_X[tb.col];
+  const y=colY[tb.col];
+  nodeRects[tb.id]={x,y,w:W,h};
+  colY[tb.col]+=h+ROW_GAP;
+  let cy=y+HDR_H+ROW_H/2+2;
+  tb.fields.forEach(f=>{
+    if(f.k==='-'){cy+=8;return;}
+    fieldYMap[`${tb.id}:${f.n}`]=cy;
+    cy+=ROW_H;
+  });
+});
+
+function drawGroupLabels(){
+  const groupDefs=[
+    {col:0,label:'기본 정보',color:'#1d4ed8',bg:'#eff6ff',border:'#bfdbfe'},
+    {col:1,label:'활동 성과',color:'#059669',bg:'#f0fdf4',border:'#bbf7d0'},
+    {col:2,label:'베네핏 평가',color:'#c2410c',bg:'#fff7ed',border:'#fed7aa'},
+    {col:3,label:'임팩트 집계',color:'#7c3aed',bg:'#f5f3ff',border:'#ddd6fe'},
+  ];
+  groupDefs.forEach(gd=>{
+    const x=COL_X[gd.col];
+    const g=document.createElementNS(NS,'g');
+    const bg=document.createElementNS(NS,'rect');
+    bg.setAttribute('x',x);bg.setAttribute('y',0);
+    bg.setAttribute('width',W);bg.setAttribute('height',GROUP_H);
+    bg.setAttribute('rx','8');bg.setAttribute('fill',gd.bg);
+    bg.setAttribute('stroke',gd.border);bg.setAttribute('stroke-width','1');
+    g.appendChild(bg);
+    const txt=document.createElementNS(NS,'text');
+    txt.setAttribute('x',x+W/2);txt.setAttribute('y',GROUP_H/2+1);
+    txt.setAttribute('font-family','Noto Sans KR,sans-serif');
+    txt.setAttribute('font-size','13');txt.setAttribute('font-weight','700');
+    txt.setAttribute('fill',gd.color);txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('dominant-baseline','middle');
+    txt.textContent=gd.label;g.appendChild(txt);
+    bgG.appendChild(g);
+  });
+}
+drawGroupLabels();
+
+function makeNode(tb){
+  const r=nodeRects[tb.id];
+  const g=document.createElementNS(NS,'g');
+  g.setAttribute('data-node',tb.id);
+  g.setAttribute('transform',`translate(${r.x},${r.y})`);
+
+  let dragging=false,dx=0,dy=0,ox=0,oy=0;
+  g.addEventListener('mousedown',e=>{
+    e.stopPropagation();dragging=true;
+    dx=e.clientX;dy=e.clientY;ox=r.x;oy=r.y;
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    r.x=ox+(e.clientX-dx)/vscale;
+    r.y=oy+(e.clientY-dy)/vscale;
+    g.setAttribute('transform',`translate(${r.x},${r.y})`);
+    redrawEdges();
+  });
+  window.addEventListener('mouseup',()=>{dragging=false;});
+
+  const shadow=document.createElementNS(NS,'rect');
+  shadow.setAttribute('x','2');shadow.setAttribute('y','3');
+  shadow.setAttribute('width',W);shadow.setAttribute('height',r.h);
+  shadow.setAttribute('rx','10');shadow.setAttribute('fill','rgba(0,0,0,0.06)');
+  g.appendChild(shadow);
+
+  const card=document.createElementNS(NS,'rect');
+  card.setAttribute('width',W);card.setAttribute('height',r.h);
+  card.setAttribute('rx','10');card.setAttribute('fill','#fff');
+  card.setAttribute('stroke','#e2e8f0');card.setAttribute('stroke-width','1');
+  g.appendChild(card);
+
+  const hdr=document.createElementNS(NS,'rect');
+  hdr.setAttribute('width',W);hdr.setAttribute('height',HDR_H);
+  hdr.setAttribute('rx','10');hdr.setAttribute('fill',tb.color);
+  g.appendChild(hdr);
+  const hdrBot=document.createElementNS(NS,'rect');
+  hdrBot.setAttribute('y',HDR_H-10);hdrBot.setAttribute('width',W);hdrBot.setAttribute('height',10);
+  hdrBot.setAttribute('fill',tb.color);g.appendChild(hdrBot);
+
+  const hl=document.createElementNS(NS,'text');
+  hl.setAttribute('x','12');hl.setAttribute('y','16');
+  hl.setAttribute('font-family','IBM Plex Mono,monospace');
+  hl.setAttribute('font-size','12');hl.setAttribute('font-weight','600');
+  hl.setAttribute('fill','rgba(255,255,255,0.95)');
+  hl.textContent=tb.label;g.appendChild(hl);
+
+  const hr=document.createElementNS(NS,'text');
+  hr.setAttribute('x',W-10);hr.setAttribute('y','30');
+  hr.setAttribute('font-family','Noto Sans KR,sans-serif');
+  hr.setAttribute('font-size','10');hr.setAttribute('fill','rgba(255,255,255,0.75)');
+  hr.setAttribute('text-anchor','end');hr.textContent=tb.role;g.appendChild(hr);
+
+  const divL=document.createElementNS(NS,'line');
+  divL.setAttribute('x1','0');divL.setAttribute('y1',HDR_H);
+  divL.setAttribute('x2',W);divL.setAttribute('y2',HDR_H);
+  divL.setAttribute('stroke','#e2e8f0');divL.setAttribute('stroke-width','0.8');
+  g.appendChild(divL);
+
+  let cy=HDR_H+4;
+  tb.fields.forEach((f,i)=>{
+    if(f.k==='-'){
+      const sep=document.createElementNS(NS,'line');
+      sep.setAttribute('x1','8');sep.setAttribute('y1',cy+4);
+      sep.setAttribute('x2',W-8);sep.setAttribute('y2',cy+4);
+      sep.setAttribute('stroke','#f1f5f9');sep.setAttribute('stroke-width','0.8');
+      g.appendChild(sep);cy+=8;return;
+    }
+    if(f.s){
+      const hl2=document.createElementNS(NS,'rect');
+      hl2.setAttribute('x','1');hl2.setAttribute('y',cy);
+      hl2.setAttribute('width',W-2);hl2.setAttribute('height',ROW_H);
+      hl2.setAttribute('fill','#fef9c3');g.appendChild(hl2);
+    } else {
+      const rowBg=document.createElementNS(NS,'rect');
+      rowBg.setAttribute('x','1');rowBg.setAttribute('y',cy);
+      rowBg.setAttribute('width',W-2);rowBg.setAttribute('height',ROW_H);
+      rowBg.setAttribute('fill',i%2===0?'#fafbfc':'#fff');g.appendChild(rowBg);
+    }
+    const b=BADGE[f.k]||BADGE.F;
+    const bw=f.k==='FM'?28:24;
+    const badgeBg=document.createElementNS(NS,'rect');
+    badgeBg.setAttribute('x','8');badgeBg.setAttribute('y',cy+4);
+    badgeBg.setAttribute('width',bw);badgeBg.setAttribute('height',14);
+    badgeBg.setAttribute('rx','3');badgeBg.setAttribute('fill',b.bg);g.appendChild(badgeBg);
+
+    const badgeTxt=document.createElementNS(NS,'text');
+    badgeTxt.setAttribute('x',8+bw/2);badgeTxt.setAttribute('y',cy+13);
+    badgeTxt.setAttribute('font-family','IBM Plex Mono,monospace');
+    badgeTxt.setAttribute('font-size','9');badgeTxt.setAttribute('font-weight','600');
+    badgeTxt.setAttribute('fill',b.fg);badgeTxt.setAttribute('text-anchor','middle');
+    badgeTxt.textContent=b.l;g.appendChild(badgeTxt);
+
+    const fname=document.createElementNS(NS,'text');
+    fname.setAttribute('x','42');fname.setAttribute('y',cy+ROW_H/2+1);
+    fname.setAttribute('font-family','Noto Sans KR,sans-serif');
+    fname.setAttribute('font-size','10');fname.setAttribute('fill','#374151');
+    fname.setAttribute('dominant-baseline','middle');
+    const dn=f.n.length>30?f.n.substring(0,29)+'…':f.n;
+    fname.textContent=dn;g.appendChild(fname);
+    cy+=ROW_H;
+  });
+  nodeG.appendChild(g);
+}
+TABLES.forEach(makeNode);
+
+// AGG: Rollup 집계 연결 (점선)
+const AGG=[
+  {from:'school',fField:'스쿨_학생수',to:'benefit',tField:'누적 학생 수',label:'학생수·차시'},
+  {from:'history',fField:'지역',to:'benefit',tField:'소속 지역',label:'지역 가점'},
+  {from:'benefit',fField:'기본 자격 충족 여부',to:'final_benefit',tField:'베네핏 점수 연결',label:'후보자 연결'},
+  {from:'school',fField:'스쿨_학생수',to:'dashboard',tField:'누적 교육 학생 수',label:'수업 집계'},
+  {from:'community',fField:'총 확산 인원',to:'dashboard',tField:'총 확산 인원',label:'확산인원'},
+  {from:'batch',fField:'행사_참여교사_만족도',to:'dashboard',tField:'워크숍 만족도 평균',label:'행사 만족도'},
+  {from:'school_result',fField:'프로젝트 수',to:'dashboard',tField:'누적 프로젝트 수',label:'프로젝트 집계'},
+  {from:'community_result',fField:'총 활동 횟수',to:'dashboard',tField:'수업 및 강의 건수',label:'커뮤니티 집계'},
+  {from:'community_kas',fField:'KAS_지식(K)_평균',to:'dashboard',tField:'KAS_지식(K) 평균',label:'KAS 집계'},
+  {from:'school_impact',fField:'효과성_전체_향상도',to:'dashboard',tField:'효과성_전체_향상도',label:'효과성 집계'},
+  {from:'attendance',fField:'참여 상태',to:'dashboard',tField:'전체 참여 교사 수 (중복 제거)',label:'중복제거 집계'},
+];
+
+function orthoPath(x1,y1,x2,y2){
+  const midX=(x1+x2)/2;
+  return `M${x1},${y1} H${midX} V${y2} H${x2}`;
+}
+
+function redrawEdges(){
+  edgeG.innerHTML='';
+  // FK 실선
+  TABLES.forEach(tb=>{
+    tb.fields.forEach(f=>{
+      if(!f.link)return;
+      const toTb=TABLES.find(t=>t.id===f.link.to);
+      if(!toTb)return;
+      const fromX=nodeRects[tb.id].x+W;
+      const fromY=fieldYMap[`${tb.id}:${f.n}`]||nodeRects[tb.id].y+HDR_H+ROW_H/2;
+      const toKey=`${toTb.id}:${f.link.toField}`;
+      const toY=fieldYMap[toKey]||(nodeRects[toTb.id].y+HDR_H+ROW_H/2);
+      const sameCol=Math.abs(nodeRects[tb.id].x-nodeRects[toTb.id].x)<10;
+      const toX=sameCol?nodeRects[toTb.id].x+W:nodeRects[toTb.id].x;
+      let d;
+      if(sameCol){const ox=nodeRects[tb.id].x+W+60;d=`M${fromX},${fromY} H${ox} V${toY} H${toX}`;}
+      else{d=orthoPath(fromX,fromY,toX,toY);}
+      const col=tb.color;
+      const path=document.createElementNS(NS,'path');
+      path.setAttribute('d',d);path.setAttribute('stroke',col);
+      path.setAttribute('stroke-width','1.4');path.setAttribute('fill','none');
+      path.setAttribute('opacity','0.55');edgeG.appendChild(path);
+      const c1=document.createElementNS(NS,'circle');
+      c1.setAttribute('cx',fromX+6);c1.setAttribute('cy',fromY);
+      c1.setAttribute('r','4');c1.setAttribute('fill','#fff');
+      c1.setAttribute('stroke',col);c1.setAttribute('stroke-width','1.8');
+      edgeG.appendChild(c1);
+      const endX=sameCol?nodeRects[toTb.id].x+W:nodeRects[toTb.id].x;
+      const star=document.createElementNS(NS,'text');
+      star.setAttribute('x',sameCol?endX+8:endX-6);
+      star.setAttribute('y',toY+4);
+      star.setAttribute('font-family','IBM Plex Mono,monospace');
+      star.setAttribute('font-size','12');star.setAttribute('font-weight','700');
+      star.setAttribute('fill',col);star.setAttribute('text-anchor',sameCol?'start':'end');
+      star.textContent='1';edgeG.appendChild(star);
+      const nLabel=document.createElementNS(NS,'text');
+      nLabel.setAttribute('x',fromX+14);nLabel.setAttribute('y',fromY+4);
+      nLabel.setAttribute('font-family','IBM Plex Mono,monospace');
+      nLabel.setAttribute('font-size','12');nLabel.setAttribute('font-weight','700');
+      nLabel.setAttribute('fill',col);nLabel.setAttribute('opacity','0.7');
+      nLabel.textContent='N';edgeG.appendChild(nLabel);
+    });
+  });
+  // AGG 점선
+  AGG.forEach(e=>{
+    const fromR=nodeRects[e.from];
+    const toR=nodeRects[e.to];
+    if(!fromR||!toR)return;
+    const fromY=fieldYMap[`${e.from}:${e.fField}`]||fromR.y+fromR.h/2;
+    const toY=fieldYMap[`${e.to}:${e.tField}`]||toR.y+toR.h/2;
+    const fromX=fromR.x+W+8;
+    const toX=toR.x-8;
+    const d=orthoPath(fromX,fromY,toX,toY);
+    const path=document.createElementNS(NS,'path');
+    path.setAttribute('d',d);path.setAttribute('stroke','#f59e0b');
+    path.setAttribute('stroke-width','1.4');path.setAttribute('fill','none');
+    path.setAttribute('stroke-dasharray','5,3');path.setAttribute('opacity','0.7');
+    edgeG.appendChild(path);
+    const l1=document.createElementNS(NS,'line');
+    l1.setAttribute('x1',fromR.x+W);l1.setAttribute('y1',fromY);
+    l1.setAttribute('x2',fromX);l1.setAttribute('y2',fromY);
+    l1.setAttribute('stroke','#f59e0b');l1.setAttribute('stroke-width','1.4');
+    l1.setAttribute('opacity','0.7');edgeG.appendChild(l1);
+    const l2=document.createElementNS(NS,'line');
+    l2.setAttribute('x1',toX);l2.setAttribute('y1',toY);
+    l2.setAttribute('x2',toR.x);l2.setAttribute('y2',toY);
+    l2.setAttribute('stroke','#f59e0b');l2.setAttribute('stroke-width','1.4');
+    l2.setAttribute('opacity','0.7');edgeG.appendChild(l2);
+    const c1=document.createElementNS(NS,'circle');
+    c1.setAttribute('cx',fromX);c1.setAttribute('cy',fromY);
+    c1.setAttribute('r','4');c1.setAttribute('fill','#fff');
+    c1.setAttribute('stroke','#f59e0b');c1.setAttribute('stroke-width','1.8');
+    edgeG.appendChild(c1);
+    const c2=document.createElementNS(NS,'circle');
+    c2.setAttribute('cx',toX);c2.setAttribute('cy',toY);
+    c2.setAttribute('r','4');c2.setAttribute('fill','#f59e0b');
+    edgeG.appendChild(c2);
+    const mx=(fromX+toX)/2,my=(fromY+toY)/2;
+    const tw=e.label.length*5+14;
+    const lbg=document.createElementNS(NS,'rect');
+    lbg.setAttribute('x',mx-tw/2);lbg.setAttribute('y',my-8);
+    lbg.setAttribute('width',tw);lbg.setAttribute('height',15);
+    lbg.setAttribute('rx','4');lbg.setAttribute('fill','#fffbeb');
+    lbg.setAttribute('stroke','#f59e0b');lbg.setAttribute('stroke-width','0.6');
+    lbg.setAttribute('opacity','0.95');edgeG.appendChild(lbg);
+    const lt=document.createElementNS(NS,'text');
+    lt.setAttribute('x',mx);lt.setAttribute('y',my+1);
+    lt.setAttribute('font-family','IBM Plex Mono,monospace');
+    lt.setAttribute('font-size','9');lt.setAttribute('fill','#b45309');
+    lt.setAttribute('text-anchor','middle');lt.setAttribute('dominant-baseline','middle');
+    lt.textContent=e.label;edgeG.appendChild(lt);
+  });
+}
+
+window.addEventListener('load',()=>setTimeout(redrawEdges,150));
+</script>
+</body>
+</html>
